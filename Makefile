@@ -1,7 +1,7 @@
 all: Press-F.z64
 .PHONY: all
 
-CFLAGS += -DULTRA64=1 -DPF_SOUND_FREQUENCY=22050 -O3
+CFLAGS += -O3
 
 BUILD_DIR = build
 SRC_DIR = src
