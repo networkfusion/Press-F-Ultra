@@ -17,9 +17,16 @@ unsigned int bios_a_size = 0;
 unsigned char bios_b[] = {};
 unsigned int bios_b_size = 0;
 
-static f8_system_t f8_system;
+typedef struct
+{
+  u16* video_buffer;
+  surface_t video_frame;
+  f8_system_t system;
+} pfu_emu_ctx_t;
 
-bool pfu_load_rom(const char *path)
+static pfu_emu_ctx_t emu;
+
+bool pfu_load_rom(unsigned address, const char *path)
 {
   FILE *file;
   char buffer[0x0400];
@@ -45,9 +52,10 @@ bool pfu_load_rom(const char *path)
       int bytes_read;
 
       bytes_read = fread(buffer, sizeof(char), 0x0400, file);
-      f8_write(&f8_system, 0x0800 + i, buffer, bytes_read);
-      printf("Loaded %04X bytes to %04X\n", bytes_read, 0x0800 + i);
+      f8_write(&emu.system, address + i, buffer, bytes_read);
+      printf("Loaded %04X bytes to %04X\n", bytes_read, address + i);
     }
+    fclose(file);
 
     return true;
   }
@@ -81,29 +89,73 @@ typedef struct
   int cursor;
 } pfu_menu_ctx_t;
 
+/* Emulation timing is synced to audio */
+static void pfu_audio_callback(short *buffer, size_t num_samples)
+{
+  struct controller_data keys;
+
+  controller_scan();
+  keys = get_keys_pressed();
+
+  /* Handle console input */
+  set_input_button(0, INPUT_TIME, keys.c[0].A);
+  set_input_button(0, INPUT_MODE, keys.c[0].B);
+  set_input_button(0, INPUT_HOLD, keys.c[0].Z);
+  set_input_button(0, INPUT_START, keys.c[0].start);
+
+  /* Handle player 1 input */
+  set_input_button(4, INPUT_RIGHT, keys.c[0].right);
+  set_input_button(4, INPUT_LEFT, keys.c[0].left);
+  set_input_button(4, INPUT_BACK, keys.c[0].down);
+  set_input_button(4, INPUT_FORWARD, keys.c[0].up);
+  set_input_button(4, INPUT_ROTATE_CCW, keys.c[0].C_left);
+  set_input_button(4, INPUT_ROTATE_CW, keys.c[0].C_right);
+  set_input_button(4, INPUT_PULL, keys.c[0].C_up);
+  set_input_button(4, INPUT_PUSH, keys.c[0].C_down);
+
+  /* Handle player 2 input */
+  set_input_button(1, INPUT_RIGHT, keys.c[1].right);
+  set_input_button(1, INPUT_LEFT, keys.c[1].left);
+  set_input_button(1, INPUT_BACK, keys.c[1].down);
+  set_input_button(1, INPUT_FORWARD, keys.c[1].up);
+  set_input_button(1, INPUT_ROTATE_CCW, keys.c[1].C_left);
+  set_input_button(1, INPUT_ROTATE_CW, keys.c[1].C_right);
+  set_input_button(1, INPUT_PULL, keys.c[1].C_up);
+  set_input_button(1, INPUT_PUSH, keys.c[1].C_down);
+
+  /* Emulation */
+  pressf_run(&emu.system);
+
+  /* Video */
+  draw_frame_rgb5551(((vram_t*)emu.system.f8devices[3].device)->data, emu.video_buffer);
+  
+  /* Audio */
+  memcpy(buffer, ((f8_beeper_t*)emu.system.f8devices[7].device)->samples, num_samples * 2);
+}
+
 int main(void)
 {
-  u16* vram_buffer;
-  surface_t frame;
-
-  /* Initialize Ultra64 */
+  /* Initialize console */
   console_init();
   console_set_render_mode(RENDER_MANUAL);
 
+  /* Initialize controller */
   controller_init();
   
+  /* Initialize video */
   display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
   rdpq_init();
-  vram_buffer = (u16*)malloc_uncached_aligned(64, 102 * 58 * 2);
-  frame = surface_make_linear(vram_buffer, FMT_RGBA16, 102, 58);
+  emu.video_buffer = (u16*)malloc_uncached_aligned(64, 102 * 58 * 2);
+  emu.video_frame = surface_make_linear(emu.video_buffer, FMT_RGBA16, 102, 58);
 
-  audio_init(PF_SOUND_FREQUENCY, 2);
+  /* Initialize audio */
+  audio_init(PF_SOUND_FREQUENCY, 4);
 
   /* Initialize emulator */
-  pressf_init(&f8_system);
-  f8_system_init(&f8_system, &pf_systems[0]);
-  f8_write(&f8_system, 0x0000, bios_a, 0x0400);
-  f8_write(&f8_system, 0x0400, bios_b, 0x0400);
+  pressf_init(&emu.system);
+  f8_system_init(&emu.system, &pf_systems[0]);
+  f8_write(&emu.system, 0x0000, bios_a, bios_a_size);
+  f8_write(&emu.system, 0x0400, bios_b, bios_b_size);
 
   /* Setup ROM menu if available */
   if (debug_init_sdfs("sd:/", -1))
@@ -122,9 +174,18 @@ int main(void)
     {
       if (dir.d_type == DT_REG)
       {
-        snprintf(menu.entries[count].key, sizeof(dir.d_name), "%s", dir.d_name);
-        menu.entries[count].type = PFU_ENTRY_TYPE_FILE;
-        count++;
+        /* Load BIOS if found on SD Card */
+        if (!strncmp(dir.d_name, "sl31253.bin", 8))
+          pfu_load_rom(0x0000, dir.d_name);
+        else if (!strncmp(dir.d_name, "sl31254.bin", 8))
+          pfu_load_rom(0x0400, dir.d_name);
+        else
+        {
+          /* List all other files */
+          snprintf(menu.entries[count].key, sizeof(dir.d_name), "%s", dir.d_name);
+          menu.entries[count].type = PFU_ENTRY_TYPE_FILE;
+          count++;
+        }
       }
       err = dir_findnext("sd:/press-f", &dir); 
     }
@@ -147,7 +208,13 @@ int main(void)
       else if (keys.c[0].A)
       {
         if (menu.entries[menu.cursor].type == PFU_ENTRY_TYPE_FILE)
-          pfu_load_rom(menu.entries[menu.cursor].key);
+          pfu_load_rom(0x0800, menu.entries[menu.cursor].key);
+        else if (menu.entries[menu.cursor].type == PFU_ENTRY_TYPE_BACK)
+        {
+          /* Zero some data so it doesn't persist between boots */
+          int dummy = 0;
+          f8_write(&emu.system, 0x0800, &dummy, sizeof(dummy));
+        }
         finished = true;
       }
 
@@ -169,57 +236,22 @@ int main(void)
            "Please include the sl31253.bin\n"
            "and sl31254.bin BIOS images.\n\n"
            "Alternatively, it can be\n"
-           "compiled statically.");
+           "compiled in statically.\n\n"
+           "See GitHub for instructions.");
     console_render();
     exit(1);
   }
-
   console_close();
+
+  /* Register an audio callback to also do emulation on */
+  audio_set_buffer_callback(pfu_audio_callback);
 
   /* Main loop */
   while (1)
-  { 
-    struct controller_data keys;
-    surface_t *disp;
+  {
+    surface_t *disp = display_get();
 
-    controller_scan();
-    keys = get_keys_pressed();
-
-    /* Handle console input */
-    set_input_button(0, INPUT_TIME, keys.c[0].A);
-    set_input_button(0, INPUT_MODE, keys.c[0].B);
-    set_input_button(0, INPUT_HOLD, keys.c[0].Z);
-    set_input_button(0, INPUT_START, keys.c[0].start);
-
-    /* Handle player 1 input */
-    set_input_button(4, INPUT_RIGHT, keys.c[0].right);
-    set_input_button(4, INPUT_LEFT, keys.c[0].left);
-    set_input_button(4, INPUT_BACK, keys.c[0].down);
-    set_input_button(4, INPUT_FORWARD, keys.c[0].up);
-    set_input_button(4, INPUT_ROTATE_CCW, keys.c[0].C_left);
-    set_input_button(4, INPUT_ROTATE_CW, keys.c[0].C_right);
-    set_input_button(4, INPUT_PULL, keys.c[0].C_up);
-    set_input_button(4, INPUT_PUSH, keys.c[0].C_down);
-
-    /* Handle player 2 input */
-    set_input_button(1, INPUT_RIGHT, keys.c[1].right);
-    set_input_button(1, INPUT_LEFT, keys.c[1].left);
-    set_input_button(1, INPUT_BACK, keys.c[1].down);
-    set_input_button(1, INPUT_FORWARD, keys.c[1].up);
-    set_input_button(1, INPUT_ROTATE_CCW, keys.c[1].C_left);
-    set_input_button(1, INPUT_ROTATE_CW, keys.c[1].C_right);
-    set_input_button(1, INPUT_PULL, keys.c[1].C_up);
-    set_input_button(1, INPUT_PUSH, keys.c[1].C_down);
-
-    /* Emulation */
-    pressf_run(&f8_system);
-
-    /* Audio */
-    audio_push(((f8_beeper_t*)f8_system.f8devices[7].device)->samples, PF_SOUND_SAMPLES, false);
-
-    /* Video */
-    draw_frame_rgb5551(((vram_t*)f8_system.f8devices[3].device)->data, vram_buffer);
-    disp = display_get();
+    /* Just blit the frame */
     rdpq_attach(disp, NULL);
     rdpq_set_mode_standard();
     rdpq_tex_blit(&frame, 7, 33, &(rdpq_blitparms_t){ .scale_x = 3.0f, .scale_y = 3.0f});
