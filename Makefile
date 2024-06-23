@@ -1,7 +1,12 @@
 all: Press-F.z64
 .PHONY: all
 
-CFLAGS += -O3
+CFLAGS += \
+	-DPF_BIG_ENDIAN=1 \
+	-DPF_HAVE_HLE_BIOS=0 \
+	-DPF_SOUND_FREQUENCY=22050 \
+	-DPF_ROMC=0 \
+	-O2 -funroll-loops
 
 BUILD_DIR = build
 SRC_DIR = src

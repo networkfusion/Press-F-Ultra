@@ -10,12 +10,16 @@
 #include "libpressf/src/hw/beeper.h"
 #include "libpressf/src/hw/vram.h"
 
-/* BIOS data can be added here to compile it into the output ROM */
-unsigned char bios_a[] = {};
+/* ROM data can be added here to compile it into the program. */
+
+const static unsigned char bios_a[] = {};
 unsigned int bios_a_size = 0;
 
-unsigned char bios_b[] = {};
+const static unsigned char bios_b[] = {};
 unsigned int bios_b_size = 0;
+
+const static unsigned char rom[] = {};
+unsigned int rom_size = 0;
 
 typedef struct
 {
@@ -23,6 +27,32 @@ typedef struct
   surface_t video_frame;
   f8_system_t system;
 } pfu_emu_ctx_t;
+
+typedef enum
+{
+  PFU_ENTRY_TYPE_NONE = 0,
+
+  PFU_ENTRY_TYPE_BACK,
+  PFU_ENTRY_TYPE_FILE,
+  PFU_ENTRY_TYPE_BOOL,
+
+  PFU_ENTRY_TYPE_SIZE
+} pfu_entry_type;
+
+typedef struct
+{
+  char key[256];
+  pfu_entry_type type;
+} pfu_menu_entry_t;
+
+typedef struct
+{
+  pfu_menu_entry_t entries[16];
+  char menu_title[256];
+  char menu_subtitle[256];
+  int entry_count;
+  int cursor;
+} pfu_menu_ctx_t;
 
 static pfu_emu_ctx_t emu;
 
@@ -63,76 +93,6 @@ bool pfu_load_rom(unsigned address, const char *path)
   return false;
 }
 
-typedef enum
-{
-  PFU_ENTRY_TYPE_NONE = 0,
-
-  PFU_ENTRY_TYPE_BACK,
-  PFU_ENTRY_TYPE_FILE,
-  PFU_ENTRY_TYPE_BOOL,
-
-  PFU_ENTRY_TYPE_SIZE
-} pfu_entry_type;
-
-typedef struct
-{
-  char key[256];
-  pfu_entry_type type;
-} pfu_menu_entry_t;
-
-typedef struct
-{
-  pfu_menu_entry_t entries[16];
-  char menu_title[256];
-  char menu_subtitle[256];
-  int entry_count;
-  int cursor;
-} pfu_menu_ctx_t;
-
-/* Emulation timing is synced to audio */
-static void pfu_audio_callback(short *buffer, size_t num_samples)
-{
-  struct controller_data keys;
-
-  controller_scan();
-  keys = get_keys_pressed();
-
-  /* Handle console input */
-  set_input_button(0, INPUT_TIME, keys.c[0].A);
-  set_input_button(0, INPUT_MODE, keys.c[0].B);
-  set_input_button(0, INPUT_HOLD, keys.c[0].Z);
-  set_input_button(0, INPUT_START, keys.c[0].start);
-
-  /* Handle player 1 input */
-  set_input_button(4, INPUT_RIGHT, keys.c[0].right);
-  set_input_button(4, INPUT_LEFT, keys.c[0].left);
-  set_input_button(4, INPUT_BACK, keys.c[0].down);
-  set_input_button(4, INPUT_FORWARD, keys.c[0].up);
-  set_input_button(4, INPUT_ROTATE_CCW, keys.c[0].C_left);
-  set_input_button(4, INPUT_ROTATE_CW, keys.c[0].C_right);
-  set_input_button(4, INPUT_PULL, keys.c[0].C_up);
-  set_input_button(4, INPUT_PUSH, keys.c[0].C_down);
-
-  /* Handle player 2 input */
-  set_input_button(1, INPUT_RIGHT, keys.c[1].right);
-  set_input_button(1, INPUT_LEFT, keys.c[1].left);
-  set_input_button(1, INPUT_BACK, keys.c[1].down);
-  set_input_button(1, INPUT_FORWARD, keys.c[1].up);
-  set_input_button(1, INPUT_ROTATE_CCW, keys.c[1].C_left);
-  set_input_button(1, INPUT_ROTATE_CW, keys.c[1].C_right);
-  set_input_button(1, INPUT_PULL, keys.c[1].C_up);
-  set_input_button(1, INPUT_PUSH, keys.c[1].C_down);
-
-  /* Emulation */
-  pressf_run(&emu.system);
-
-  /* Video */
-  draw_frame_rgb5551(((vram_t*)emu.system.f8devices[3].device)->data, emu.video_buffer);
-  
-  /* Audio */
-  memcpy(buffer, ((f8_beeper_t*)emu.system.f8devices[7].device)->samples, num_samples * 2);
-}
-
 int main(void)
 {
   /* Initialize console */
@@ -143,19 +103,23 @@ int main(void)
   controller_init();
   
   /* Initialize video */
-  display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
+  display_init(RESOLUTION_640x480, DEPTH_16_BPP, 2, GAMMA_NONE, FILTERS_RESAMPLE);
   rdpq_init();
-  emu.video_buffer = (u16*)malloc_uncached_aligned(64, 102 * 58 * 2);
-  emu.video_frame = surface_make_linear(emu.video_buffer, FMT_RGBA16, 102, 58);
+  emu.video_buffer = (u16*)malloc_uncached_aligned(64, SCREEN_WIDTH * SCREEN_HEIGHT * 2);
+  emu.video_frame = surface_make_linear(emu.video_buffer, FMT_RGBA16, SCREEN_WIDTH, SCREEN_HEIGHT);
 
   /* Initialize audio */
-  audio_init(PF_SOUND_FREQUENCY, 4);
+  audio_init(PF_SOUND_FREQUENCY, 2);
 
   /* Initialize emulator */
   pressf_init(&emu.system);
   f8_system_init(&emu.system, &pf_systems[0]);
-  f8_write(&emu.system, 0x0000, bios_a, bios_a_size);
-  f8_write(&emu.system, 0x0400, bios_b, bios_b_size);
+  if (bios_a_size)
+    f8_write(&emu.system, 0x0000, bios_a, bios_a_size);
+  if (bios_b_size)
+    f8_write(&emu.system, 0x0400, bios_b, bios_b_size);
+  if (rom_size)
+    f8_write(&emu.system, 0x0800, rom, rom_size);
 
   /* Setup ROM menu if available */
   if (debug_init_sdfs("sd:/", -1))
@@ -220,6 +184,7 @@ int main(void)
 
       /* Render menu entries */
       console_clear();
+      printf("\n\n");
       for (i = 0; i < menu.entry_count; i++)
         printf("%c %s\n", i == menu.cursor ? '>' : '-', menu.entries[i].key);
       console_render();
@@ -243,18 +208,56 @@ int main(void)
   }
   console_close();
 
-  /* Register an audio callback to also do emulation on */
-  audio_set_buffer_callback(pfu_audio_callback);
-
   /* Main loop */
   while (1)
   {
     surface_t *disp = display_get();
 
+    struct controller_data keys;
+
+    controller_scan();
+    keys = get_keys_pressed();
+
+    /* Handle console input */
+    set_input_button(0, INPUT_TIME, keys.c[0].A);
+    set_input_button(0, INPUT_MODE, keys.c[0].B);
+    set_input_button(0, INPUT_HOLD, keys.c[0].Z);
+    set_input_button(0, INPUT_START, keys.c[0].start);
+
+    /* Handle player 1 input */
+    set_input_button(4, INPUT_RIGHT, keys.c[0].right);
+    set_input_button(4, INPUT_LEFT, keys.c[0].left);
+    set_input_button(4, INPUT_BACK, keys.c[0].down);
+    set_input_button(4, INPUT_FORWARD, keys.c[0].up);
+    set_input_button(4, INPUT_ROTATE_CCW, keys.c[0].C_left);
+    set_input_button(4, INPUT_ROTATE_CW, keys.c[0].C_right);
+    set_input_button(4, INPUT_PULL, keys.c[0].C_up);
+    set_input_button(4, INPUT_PUSH, keys.c[0].C_down);
+
+    /* Handle player 2 input */
+    set_input_button(1, INPUT_RIGHT, keys.c[1].right);
+    set_input_button(1, INPUT_LEFT, keys.c[1].left);
+    set_input_button(1, INPUT_BACK, keys.c[1].down);
+    set_input_button(1, INPUT_FORWARD, keys.c[1].up);
+    set_input_button(1, INPUT_ROTATE_CCW, keys.c[1].C_left);
+    set_input_button(1, INPUT_ROTATE_CW, keys.c[1].C_right);
+    set_input_button(1, INPUT_PULL, keys.c[1].C_up);
+    set_input_button(1, INPUT_PUSH, keys.c[1].C_down);
+
+    /* Emulation */
+    pressf_run(&emu.system);
+
+    /* Video */
+    draw_frame_rgb5551(((vram_t*)emu.system.f8devices[3].device)->data, emu.video_buffer);
+
+    /* Audio */
+    audio_push(((f8_beeper_t*)emu.system.f8devices[7].device)->samples, PF_SOUND_SAMPLES, false);
+
     /* Just blit the frame */
-    rdpq_attach(disp, NULL);
+    rdpq_attach_clear(disp, NULL);
     rdpq_set_mode_standard();
-    rdpq_tex_blit(&frame, 7, 33, &(rdpq_blitparms_t){ .scale_x = 3.0f, .scale_y = 3.0f});
+    rdpq_tex_blit(&emu.video_frame, 14, 66, &(rdpq_blitparms_t){ .scale_x = 6.0f, .scale_y = 6.0f});
+    //rdpq_tex_blit(&emu.video_frame, 0, 0, &(rdpq_blitparms_t){ .scale_x = 640.0f / SCREEN_WIDTH, .scale_y = 480.0f / SCREEN_HEIGHT});
     rdpq_detach_show();
   }
 }
