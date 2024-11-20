@@ -56,7 +56,7 @@ typedef struct
 
 static pfu_emu_ctx_t emu;
 
-bool pfu_load_rom(unsigned address, const char *path)
+int pfu_load_rom(unsigned address, const char *path)
 {
   FILE *file;
   char buffer[0x0400];
@@ -87,10 +87,25 @@ bool pfu_load_rom(unsigned address, const char *path)
     }
     fclose(file);
 
-    return true;
+    return 1;
   }
 
-  return false;
+  return 0;
+}
+
+void pfu_error_no_rom(void)
+{
+  console_clear();
+  printf("Press F requires ROM data\n"
+         "to be stored on the SD Card\n"
+         "in the \"press-f\" directory.\n\n"
+         "Please include the sl31253.bin\n"
+         "and sl31254.bin BIOS images.\n\n"
+         "Alternatively, it can be\n"
+         "compiled in statically.\n\n"
+         "See GitHub for instructions.");
+  console_render();
+  exit(1);
 }
 
 int main(void)
@@ -140,10 +155,10 @@ int main(void)
       {
         /* Load BIOS if found on SD Card */
         if (!strncmp(dir.d_name, "sl31253.bin", 8))
-          pfu_load_rom(0x0000, dir.d_name);
+          bios_a_size = pfu_load_rom(0x0000, dir.d_name);
         else if (!strncmp(dir.d_name, "sl31254.bin", 8))
-          pfu_load_rom(0x0400, dir.d_name);
-        else
+          bios_b_size = pfu_load_rom(0x0400, dir.d_name);
+        else if (strlen(dir.d_name) && dir.d_name[0] != '.')
         {
           /* List all other files */
           snprintf(menu.entries[count].key, sizeof(dir.d_name), "%s", dir.d_name);
@@ -153,6 +168,9 @@ int main(void)
       }
       err = dir_findnext("sd:/press-f", &dir); 
     }
+
+    if (!bios_a_size || !bios_b_size)
+      pfu_error_no_rom();
 
     menu.entry_count = count;
     menu.cursor = 0;
@@ -167,7 +185,7 @@ int main(void)
       keys = get_keys_down();
       if (keys.c[0].up && menu.cursor > 0)
         menu.cursor--;
-      else if (keys.c[0].down && menu.cursor < menu.entry_count)
+      else if (keys.c[0].down && menu.cursor < menu.entry_count - 1)
         menu.cursor++;
       else if (keys.c[0].A)
       {
@@ -193,19 +211,7 @@ int main(void)
     debug_close_sdfs();
   }
   else if (!bios_a_size || !bios_b_size)
-  {
-    console_clear();
-    printf("Press F requires ROM data\n"
-           "to be stored on the SD Card\n"
-           "in the \"press-f\" directory.\n\n"
-           "Please include the sl31253.bin\n"
-           "and sl31254.bin BIOS images.\n\n"
-           "Alternatively, it can be\n"
-           "compiled in statically.\n\n"
-           "See GitHub for instructions.");
-    console_render();
-    exit(1);
-  }
+    pfu_error_no_rom();
   console_close();
 
   /* Main loop */
