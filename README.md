@@ -9,7 +9,9 @@ A Fairchild Channel F emulator for Nintendo 64.
 ### Nintendo 64 Flashcart
 
 - Download the [latest release](https://github.com/celerizer/Press-F-Ultra/releases/).
-- Place the `sl31253.bin` and `sl31254.bin` Channel F BIOS images and any additional cartridge ROMs in a "press-f" subdirectory on the SD Card.
+- Place the Channel F BIOS images and any additional cartridge ROMs in a "press-f" subdirectory on the root of the SD Card. Make sure the two BIOS images have these exact filenames:
+  - `sl31253.bin`
+  - `sl31254.bin` 
 - Boot `Press-F.z64` and choose a game to play.
 
 ### Emulator
