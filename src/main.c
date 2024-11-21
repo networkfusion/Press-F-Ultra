@@ -117,6 +117,26 @@ void pfu_error_no_rom(void)
   exit(1);
 }
 
+void pfu_video_render_1_1(void)
+{
+  surface_t *disp = display_get();
+  
+  rdpq_attach_clear(disp, NULL);
+  rdpq_set_mode_standard();
+  rdpq_tex_blit(&emu.video_frame, 14, 66, &(rdpq_blitparms_t){ .scale_x = 6.0f, .scale_y = 6.0f});
+  rdpq_detach_show();
+}
+
+void pfu_video_render_4_3(void)
+{
+  surface_t *disp = display_get();
+
+  rdpq_attach_clear(disp, NULL);
+  rdpq_set_mode_standard();
+  rdpq_tex_blit(&emu.video_frame, 0, 0, &(rdpq_blitparms_t){ .scale_x = 640.0f / SCREEN_WIDTH, .scale_y = 480.0f / SCREEN_HEIGHT});
+  rdpq_detach_show();
+}
+
 int main(void)
 {
   /* Initialize console */
@@ -227,8 +247,6 @@ int main(void)
   /* Main loop */
   while (1)
   {
-    surface_t *disp = display_get();
-
     struct controller_data keys;
 
     controller_scan();
@@ -276,12 +294,9 @@ int main(void)
     audio_push(((f8_beeper_t*)emu.system.f8devices[7].device)->samples, PF_SOUND_SAMPLES, false);
 
     /* Just blit the frame */
-    rdpq_attach_clear(disp, NULL);
-    rdpq_set_mode_standard();
     if (emu.video_scaling == PFU_SCALING_1_1)
-      rdpq_tex_blit(&emu.video_frame, 14, 66, &(rdpq_blitparms_t){ .scale_x = 6.0f, .scale_y = 6.0f});
-    else if (emu.video_scaling == PFU_SCALING_4_3)
-      rdpq_tex_blit(&emu.video_frame, 0, 0, &(rdpq_blitparms_t){ .scale_x = 640.0f / SCREEN_WIDTH, .scale_y = 480.0f / SCREEN_HEIGHT});
-    rdpq_detach_show();
+      pfu_video_render_1_1();
+    else
+      pfu_video_render_4_3();
   }
 }
