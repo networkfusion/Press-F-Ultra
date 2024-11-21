@@ -14,6 +14,7 @@ include $(N64_INST)/include/n64.mk
 
 OBJS = $(BUILD_DIR)/src/main.o \
 	$(BUILD_DIR)/src/libpressf/src/debug.o \
+	$(BUILD_DIR)/src/libpressf/src/dma.o \
 	$(BUILD_DIR)/src/libpressf/src/emu.o \
 	$(BUILD_DIR)/src/libpressf/src/font.o \
 	$(BUILD_DIR)/src/libpressf/src/hle.o \
