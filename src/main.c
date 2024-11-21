@@ -21,10 +21,19 @@ unsigned int bios_b_size = 0;
 const static unsigned char rom[] = {};
 unsigned int rom_size = 0;
 
+typedef enum
+{
+  PFU_SCALING_1_1 = 0,
+  PFU_SCALING_4_3,
+
+  PFU_SCALING_SIZE
+} pfu_scaling_type;
+
 typedef struct
 {
   u16* video_buffer;
   surface_t video_frame;
+  pfu_scaling_type video_scaling;
   f8_system_t system;
 } pfu_emu_ctx_t;
 
@@ -122,6 +131,7 @@ int main(void)
   rdpq_init();
   emu.video_buffer = (u16*)malloc_uncached_aligned(64, SCREEN_WIDTH * SCREEN_HEIGHT * 2);
   emu.video_frame = surface_make_linear(emu.video_buffer, FMT_RGBA16, SCREEN_WIDTH, SCREEN_HEIGHT);
+  emu.video_scaling = PFU_SCALING_4_3;
 
   /* Initialize audio */
   audio_init(PF_SOUND_FREQUENCY, 2);
@@ -250,6 +260,12 @@ int main(void)
     set_input_button(1, INPUT_PULL, keys.c[1].C_up);
     set_input_button(1, INPUT_PUSH, keys.c[1].C_down);
 
+    /* Handle hotkeys */
+    if (keys.c[0].L)
+      emu.video_scaling = PFU_SCALING_1_1;
+    else if (keys.c[0].R)
+      emu.video_scaling = PFU_SCALING_4_3;
+
     /* Emulation */
     pressf_run(&emu.system);
 
@@ -262,8 +278,10 @@ int main(void)
     /* Just blit the frame */
     rdpq_attach_clear(disp, NULL);
     rdpq_set_mode_standard();
-    rdpq_tex_blit(&emu.video_frame, 14, 66, &(rdpq_blitparms_t){ .scale_x = 6.0f, .scale_y = 6.0f});
-    //rdpq_tex_blit(&emu.video_frame, 0, 0, &(rdpq_blitparms_t){ .scale_x = 640.0f / SCREEN_WIDTH, .scale_y = 480.0f / SCREEN_HEIGHT});
+    if (emu.video_scaling == PFU_SCALING_1_1)
+      rdpq_tex_blit(&emu.video_frame, 14, 66, &(rdpq_blitparms_t){ .scale_x = 6.0f, .scale_y = 6.0f});
+    else if (emu.video_scaling == PFU_SCALING_4_3)
+      rdpq_tex_blit(&emu.video_frame, 0, 0, &(rdpq_blitparms_t){ .scale_x = 640.0f / SCREEN_WIDTH, .scale_y = 480.0f / SCREEN_HEIGHT});
     rdpq_detach_show();
   }
 }
