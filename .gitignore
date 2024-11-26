@@ -1,3 +1,7 @@
 
 /build
 *.z64
+/filesystem
+*.bin
+*.chf
+*.rom
