@@ -2,7 +2,7 @@
 
 **Press F Ultra** is a Fairchild Channel F emulator for Nintendo 64, utilizing the **[libpressf](https://github.com/celerizer/libpressf)** emulation library.
 
-![image](https://github.com/user-attachments/assets/f603b826-cc3f-4dd7-a268-b6f9dcd2ed86)
+![images](https://github.com/user-attachments/assets/83d289c0-f379-4551-8610-747b1f4f0672)
 
 ## Usage
 
