@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <libdragon.h>
+#include "libcart/cart.h"
 
 #include "libpressf/src/emu.h"
 #include "libpressf/src/screen.h"
@@ -42,6 +43,79 @@ void pfu_state_set(pfu_state_type state)
     break;
   }
   emu.state = state;
+}
+
+/**
+ * Returns the memory location of a stamped ROM when loading as a plugin, or
+ * 0 if doing so is not supported.
+ */
+static unsigned pfu_plugin_rom_address(void)
+{
+  switch (cart_type)
+  {
+  case CART_CI:
+  case CART_SC:
+    return 0x10200000;
+  case CART_EDX:
+  case CART_ED:
+    return 0xB0200000;
+  default:
+    return 0;
+  }
+}
+
+/**
+ * Verifies a section of a supposed Channel F ROM in memory by testing if
+ * its contents contain a significant (and arbitrary) number of zeroes.
+ * Currently, the arbitrary limit is to fail if 75% of the contents are zero.
+ */
+static bool pfu_plugin_verify_section(const uint8_t *buffer, unsigned size)
+{
+  unsigned zeroes = 0;
+  unsigned i;
+
+  for (i = 0; i < size; i++)
+  {
+    if (buffer[i] == 0)
+      zeroes++;
+  }
+
+  return zeroes < (size / 4) * 3;
+}
+
+/**
+ * Attempts to load a Channel F ROM stamped in memory by the previous program
+ * loader. Returns true if a ROM was successfully read, if the plugin feature
+ * is available.
+ * @todo Perhaps test for the 0x55 identifier
+ */
+static bool pfu_plugin_read_rom(void)
+{
+  const unsigned base = pfu_plugin_rom_address();
+
+  if (!base)
+    return false;
+  else
+  {
+    unsigned address = 0x0800;
+    uint8_t buf[0x0200];
+    bool success;
+
+    do
+    {
+      dma_read_async(&buffer, base + address, sizeof(buffer));
+      dma_wait();
+
+      success = pfu_plugin_verify_section(buffer, sizeof(buffer));
+      if (success)
+      {
+        f8_write(&emu.sys, address, buffer, sizeof(buffer));
+        address += sizeof(buffer);
+      }
+    } while (success);
+  }
+
+  return address != 0x0800;
 }
 
 int main(void)
@@ -83,7 +157,12 @@ int main(void)
   pressf_init(&emu.system);
   f8_system_init(&emu.system, &pf_systems[0]);
   pfu_menu_init();
-  pfu_menu_switch_roms();
+
+  /* If loaded as plugin, jump to loaded ROM, otherwise load ROM menu */
+  if (pfu_plugin_read_rom())
+    pfu_state_set(PFU_STATE_EMU);
+  else
+    pfu_menu_switch_roms();
 
   while (64)
   {
