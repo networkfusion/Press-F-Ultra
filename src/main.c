@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <string.h>
-#include <stdint.h>
 
 #include <libdragon.h>
 #include "libcart/cart.h"
@@ -69,7 +68,7 @@ static unsigned pfu_plugin_rom_address(void)
  * its contents contain a significant (and arbitrary) number of zeroes.
  * Currently, the arbitrary limit is to fail if 75% of the contents are zero.
  */
-static bool pfu_plugin_verify_section(const uint8_t *buffer, unsigned size)
+static bool pfu_plugin_verify_section(const u8 *buffer, unsigned size)
 {
   unsigned zeroes = 0;
   unsigned i;
@@ -93,12 +92,12 @@ static bool pfu_plugin_read_rom(void)
 {
   const unsigned base = pfu_plugin_rom_address();
   unsigned address = 0x0800;
-  
+
   if (!base)
     return false;
   else
   {
-    uint8_t buffer[0x0200];
+    u8 buffer[0x0200];
     bool success;
 
     do
@@ -112,7 +111,7 @@ static bool pfu_plugin_read_rom(void)
         f8_write(&emu.system, address, buffer, sizeof(buffer));
         address += sizeof(buffer);
       }
-    } while (success);
+    } while (success && address < 0x10000);
   }
 
   return address != 0x0800;
@@ -128,7 +127,7 @@ int main(void)
   /* Initialize video */
   display_init(RESOLUTION_640x480, DEPTH_16_BPP, 2, GAMMA_NONE, FILTERS_RESAMPLE);
   rdpq_init();
-  emu.video_buffer = (uint16_t*)malloc_uncached_aligned(64, SCREEN_WIDTH * SCREEN_HEIGHT * 2);
+  emu.video_buffer = (u16*)malloc_uncached_aligned(64, SCREEN_WIDTH * SCREEN_HEIGHT * 2);
   emu.video_frame = surface_make_linear(emu.video_buffer, FMT_RGBA16, SCREEN_WIDTH, SCREEN_HEIGHT);
   emu.video_scaling = PFU_SCALING_4_3;
 
