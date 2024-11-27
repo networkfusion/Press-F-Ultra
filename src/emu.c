@@ -9,23 +9,40 @@
 #include "main.h"
 #include "emu.h"
 
+#define PFU_EMU_X_MARGIN_240P 24
+#define PFU_EMU_X_MARGIN_480P 48
+#define PFU_EMU_Y_MARGIN_240P 16
+#define PFU_EMU_Y_MARGIN_480P 32
+
+static const rdpq_blitparms_t pfu_1_1_480p_params = {
+  .scale_x = 6.0f,
+  .scale_y = 6.0f };
 static void pfu_video_render_1_1(void)
 {
   surface_t *disp = display_get();
 
   rdpq_attach_clear(disp, NULL);
   rdpq_set_mode_standard();
-  rdpq_tex_blit(&emu.video_frame, 14, 66, &(rdpq_blitparms_t){ .scale_x = 6.0f, .scale_y = 6.0f});
+  rdpq_tex_blit(&emu.video_frame,
+                14,
+                66,
+                &pfu_1_1_480p_params);
   rdpq_detach_show();
 }
 
+static const rdpq_blitparms_t pfu_4_3_480p_params = {
+  .scale_x = 640.0f / (SCREEN_WIDTH + PFU_EMU_X_MARGIN_480P * 2),
+  .scale_y = 480.0f / (SCREEN_HEIGHT + PFU_EMU_Y_MARGIN_480P * 2) };
 static void pfu_video_render_4_3(void)
 {
   surface_t *disp = display_get();
 
   rdpq_attach_clear(disp, NULL);
   rdpq_set_mode_standard();
-  rdpq_tex_blit(&emu.video_frame, 0, 0, &(rdpq_blitparms_t){ .scale_x = 640.0f / SCREEN_WIDTH, .scale_y = 480.0f / SCREEN_HEIGHT});
+  rdpq_tex_blit(&emu.video_frame,
+                PFU_EMU_X_MARGIN_480P,
+                PFU_EMU_Y_MARGIN_480P,
+                &pfu_4_3_480p_params);
   rdpq_detach_show();
 }
 
