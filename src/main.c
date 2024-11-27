@@ -92,13 +92,13 @@ static bool pfu_plugin_verify_section(const uint8_t *buffer, unsigned size)
 static bool pfu_plugin_read_rom(void)
 {
   const unsigned base = pfu_plugin_rom_address();
-
+  unsigned address = 0x0800;
+  
   if (!base)
     return false;
   else
   {
-    unsigned address = 0x0800;
-    uint8_t buf[0x0200];
+    uint8_t buffer[0x0200];
     bool success;
 
     do
@@ -109,7 +109,7 @@ static bool pfu_plugin_read_rom(void)
       success = pfu_plugin_verify_section(buffer, sizeof(buffer));
       if (success)
       {
-        f8_write(&emu.sys, address, buffer, sizeof(buffer));
+        f8_write(&emu.system, address, buffer, sizeof(buffer));
         address += sizeof(buffer);
       }
     } while (success);
