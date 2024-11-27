@@ -44,3 +44,8 @@ The L Trigger and R Trigger can be used to open a ROM menu and settings menu res
 git clone https://github.com/celerizer/Press-F-Ultra.git --recurse-submodules
 ```
 - Run `make`.
+
+## License
+
+- **Press F Ultra** and **libpressf** are distributed under the MIT license. See LICENSE for information.
+- The font **Tuffy Bold** is used under the public domain.
