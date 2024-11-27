@@ -31,8 +31,8 @@ static void pfu_video_render_1_1(void)
 }
 
 static const rdpq_blitparms_t pfu_4_3_480p_params = {
-  .scale_x = 640.0f / (SCREEN_WIDTH + PFU_EMU_X_MARGIN_480P * 2),
-  .scale_y = 480.0f / (SCREEN_HEIGHT + PFU_EMU_Y_MARGIN_480P * 2) };
+  .scale_x = (640.0f - PFU_EMU_X_MARGIN_480P * 2) / SCREEN_WIDTH,
+  .scale_y = (480.0f - PFU_EMU_Y_MARGIN_480P * 2) / SCREEN_HEIGHT };
 static void pfu_video_render_4_3(void)
 {
   surface_t *disp = display_get();
