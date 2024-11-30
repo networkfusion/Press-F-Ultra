@@ -33,13 +33,13 @@ void pfu_state_set(pfu_state_type state)
 {
   switch (emu.state)
   {
-  case PFU_STATE_MENU:
-    console_close();
-    break;
-  case PFU_STATE_EMU:
-    break;
-  default:
-    break;
+    case PFU_STATE_MENU:
+      console_close();
+      break;
+    case PFU_STATE_EMU:
+      break;
+    default:
+      break;
   }
   emu.state = state;
 }
@@ -52,14 +52,14 @@ static unsigned pfu_plugin_rom_address(void)
 {
   switch (cart_type)
   {
-  case CART_CI:
-  case CART_SC:
-    return 0x10200000;
-  case CART_EDX:
-  case CART_ED:
-    return 0xB0200000;
-  default:
-    return 0;
+    case CART_CI:
+    case CART_SC:
+      return 0x10200000;
+    case CART_EDX:
+    case CART_ED:
+      return 0xB0200000;
+    default:
+      return NULL; // This is an emulator or something else.
   }
 }
 
@@ -119,6 +119,9 @@ static bool pfu_plugin_read_rom(void)
 
 int main(void)
 {
+  /* Initialize flashcart detection */
+  cart_init();
+
   /* Initialize controller */
   joypad_init();
 
@@ -167,14 +170,14 @@ int main(void)
   {
     switch (emu.state)
     {
-    case PFU_STATE_MENU:
-      pfu_menu_run();
-      break;
-    case PFU_STATE_EMU:
-      pfu_emu_run();
-      break;
-    default:
-      exit(0);
+      case PFU_STATE_MENU:
+        pfu_menu_run();
+        break;
+      case PFU_STATE_EMU:
+        pfu_emu_run();
+        break;
+      default:
+        exit(0);
     }
     emu.frames++;
   }
