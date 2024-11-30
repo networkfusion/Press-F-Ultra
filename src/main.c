@@ -119,10 +119,10 @@ static bool pfu_plugin_read_rom(void)
 
 int main(void)
 {
+  memset(&emu, 0, sizeof(emu));
+
   /* Initialize controller */
   joypad_init();
-
-  memset(&emu, 0, sizeof(emu));
   
   /* Initialize video */
   display_init(RESOLUTION_640x480, DEPTH_16_BPP, 2, GAMMA_NONE, FILTERS_RESAMPLE);
@@ -132,6 +132,7 @@ int main(void)
   emu.video_scaling = PFU_SCALING_4_3;
 
   /* Initialize assets */
+  cart_init();
   dfs_init(DFS_DEFAULT_LOCATION);
 
   /* Initialize fonts */
