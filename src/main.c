@@ -102,7 +102,7 @@ static bool pfu_plugin_read_rom(void)
 
     do
     {
-      dma_read_async(&buffer, base + address, sizeof(buffer));
+      dma_read_async(buffer, base + address, sizeof(buffer));
       dma_wait();
 
       success = pfu_plugin_verify_section(buffer, sizeof(buffer));
